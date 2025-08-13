@@ -1,0 +1,2 @@
+# DiskLinearWriteSpeedTestForMacOSTerminal
+适用于macOS终端的全盘写入性能测试工具脚本
