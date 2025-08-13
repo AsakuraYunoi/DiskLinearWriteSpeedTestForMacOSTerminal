@@ -1,6 +1,5 @@
-# DiskLinearWriteSpeedTestForMacOSTerminal
-
-### 适用于 macOS 的全盘写入性能测试工具
+# 适用于 macOS 的全盘写入性能测试工具
+# Disk Linear Write Speed Test For MacOS Terminal
 
 这是一个专为 macOS 设计的终端脚本，用于全面测试磁盘的写入性能和稳定性。
 
