@@ -3,7 +3,7 @@
 TEST_FILE="disk_benchmark_temp_file.tmp"
 RAW_DATA_LOG="benchmark_data_raw.log"
 FITTED_DATA_LOG="benchmark_data_fitted.log"
-BLOCK_SIZE="1048576"
+BLOCK_SIZE="1048576" # 1MB block size
 
 install_dependencies() {
     echo "⚙️  正在检查并安装依赖项..."
@@ -34,13 +34,14 @@ install_dependencies() {
 }
 
 get_time() {
+    # 优先使用 gdate (coreutils) 以获得纳秒级精度
     gdate +%s.%N 2>/dev/null || date +%s.%N || date +%s
 }
 
 # --- 主程序开始 ---
 clear
 echo "==================================================="
-echo "    macOS 硬盘写入性能一键测试工具 (v1.0)    "
+echo "    macOS 硬盘写入性能一键测试工具 (v2.0)    "
 echo "==================================================="
 
 install_dependencies
@@ -82,9 +83,9 @@ echo "测试文件: $(pwd)/${TEST_FILE}"
 dd if=/dev/zero of="$TEST_FILE" bs="$BLOCK_SIZE" count="$count" &> /dev/null &
 dd_pid=$!
 
-echo "# Time(s) Speed(MB/s)" > "$RAW_DATA_LOG"
-printf "%-10s | %-15s\n" "时间 (秒)" "速度 (MB/s)"
-printf "------------------------------\n"
+echo "# Written(GB) Speed(MB/s)" > "$RAW_DATA_LOG"
+printf "%-15s | %-15s\n" "已写入 (GB)" "实时速度 (MB/s)"
+printf "-------------------------------------\n"
 
 # 监控循环
 while kill -0 "$dd_pid" 2>/dev/null; do
@@ -95,9 +96,11 @@ while kill -0 "$dd_pid" 2>/dev/null; do
 
     if (( $(echo "$time_diff > 0.001" | bc -l) )); then
         speed=$(echo "scale=2; $size_diff / $time_diff / 1024 / 1024" | bc)
-        elapsed_seconds=$(printf "%.3f" $(echo "$current_time - $start_time" | bc))
-        printf -- "\r%-10s | %-15s" "$elapsed_seconds" "$speed"
-        echo "$elapsed_seconds $speed" >> "$RAW_DATA_LOG"
+        written_gb=$(echo "scale=3; $current_size / 1024 / 1024 / 1024" | bc)
+        
+        printf -- "\r%-15s | %-15s" "$written_gb" "$speed"
+        echo "$written_gb $speed" >> "$RAW_DATA_LOG"
+        
         last_size=$current_size
         last_time=$current_time
     fi
@@ -105,8 +108,13 @@ while kill -0 "$dd_pid" 2>/dev/null; do
 done
 
 wait "$dd_pid"
+
+# 计算总耗时
+end_time=$(get_time)
+total_time=$(printf "%.2f" $(echo "$end_time - $start_time" | bc))
+
 echo "\n--------------------------------------------------"
-echo "✅ 文件写入完成。"
+echo "✅ 文件写入完成，总耗时: ${total_time} 秒。"
 
 # 数据拟合与统计
 echo "📈 正在分析和拟合数据..."
@@ -116,46 +124,50 @@ if [ $(grep -v '#' "$RAW_DATA_LOG" | wc -l) -lt 2 ]; then
     exit 1
 fi
 
-# 数据拟合（0.1s 平均值）
-awk '
+# 数据拟合 (按每 0.05GB 的写入量进行平均)
+awk -v block_avg_size=0.05 '
     BEGIN {
         sum_speed = 0;
         count = 0;
-        current_time_group = 0.1;
+        current_size_group = block_avg_size;
     }
     !/^#/ {
-        time = $1;
+        size_gb = $1;
         speed = $2;
         
-        while (time >= current_time_group) {
+        while (size_gb >= current_size_group) {
             if (count > 0) {
-                printf "%.2f %.2f\n", current_time_group - 0.05, sum_speed / count;
+                # 使用区间的中点作为 X 坐标
+                printf "%.3f %.2f\n", current_size_group - (block_avg_size / 2), sum_speed / count;
             }
             sum_speed = 0;
             count = 0;
-            current_time_group += 0.1;
+            current_size_group += block_avg_size;
         }
         sum_speed += speed;
         count++;
     }
     END {
         if (count > 0) {
-            printf "%.2f %.2f\n", current_time_group - 0.05, sum_speed / count;
+            printf "%.3f %.2f\n", current_size_group - (block_avg_size / 2), sum_speed / count;
         }
     }
 ' "$RAW_DATA_LOG" > "$FITTED_DATA_LOG"
+
 
 # 计算总体的平均值、最大值和最小值
 awk_results=$(awk '
     BEGIN {sum=0; count=0; min=1e100; max=-1e100}
     !/^#/ {
+        size_gb = $1;
         speed = $2;
+        
         if (speed > max) max = speed;
         sum += speed;
         count++;
         
-        # 仅在时间大于0.05秒后才开始计算最低速度
-        if ($1 > 0.05) {
+        # 仅在写入量大于 0.05GB 后才开始计算最低速度，以忽略初始波动
+        if (size_gb > 0.05) {
             if (speed < min) min = speed;
         }
     }
@@ -184,11 +196,15 @@ gnuplot <<- EOF
     set terminal pngcairo size 1600,900 font "Arial,12"
     set output '$output_image'
     
-    set title "硬盘写入性能测试 - ${test_name}\n平均速度: ${avg_speed} MB/s | 峰值速度: ${peak_speed} MB/s | 最低速度: ${min_speed} MB/s"
-    set xlabel "时间 (秒)"
+    # 修改图表标题，加入总耗时
+    set title "硬盘写入性能测试 - ${test_name}\n总耗时: ${total_time}s | 平均速度: ${avg_speed} MB/s | 峰值速度: ${peak_speed} MB/s | 最低速度: ${min_speed} MB/s"
+    
+    # 修改 X 轴标签
+    set xlabel "写入量 (GB)"
     set ylabel "写入速度 (MB/s)"
     
-    set xrange [0:*]
+    # 设定 X 轴范围，从 0 到用户指定的 GB 数
+    set xrange [0:${file_size_gb}]
     set xtics auto
     set ytics nomirror
     
@@ -197,7 +213,7 @@ gnuplot <<- EOF
     set border 3
     set style data lines
     
-    plot '$FITTED_DATA_LOG' using 1:2 with linespoints title "速度" lw 2 lc rgb "#0072B2"
+    plot '$FITTED_DATA_LOG' using 1:2 with linespoints title "速度 (每 0.05GB 平均值)" lw 2 lc rgb "#0072B2"
 EOF
 
 # 清理日志文件
@@ -211,5 +227,5 @@ else
 fi
 
 echo "==================================================="
-echo "            测试已完成。           "
+echo "                  测试已完成。                   "
 echo "==================================================="
