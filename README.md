@@ -26,10 +26,11 @@
 2.  **运行脚本**：在终端中粘贴并执行以下命令即可启动测试。
 
     ```bash
-    sh //把脚本的.sh文件拖进来之后会车
+    sh //把脚本的.sh文件拖进来之后回车
     ```
 
 3.  **按照提示操作**：脚本启动后会显示提示信息，请根据提示完成后续步骤。
 
 -----
 
+<img width="1600" height="900" alt="test1" src="https://github.com/user-attachments/assets/f5910725-a6d7-4982-b3a9-e0e3cbda3b3c" />
