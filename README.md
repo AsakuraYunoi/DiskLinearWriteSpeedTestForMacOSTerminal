@@ -17,16 +17,16 @@
 
 **请确保您的 Mac 连接到稳定的网络，以便自动安装所需的依赖项。**
 
-1.  **导航到目标目录**：打开终端，使用 `cd` 命令进入你想要测试的硬盘或分区的目录。
+1.  **克隆仓库**：打开终端，使用 `cd` 命令进入你想要测试的硬盘或分区的目录。
 
     ```bash
-    cd /Volumes/你的磁盘名称
+    git clone https://github.com/AsakuraYunoi/DiskLinearWriteSpeedTestForMacOSTerminal.git
     ```
 
-2.  **一键运行脚本**：在终端中粘贴并执行以下命令即可启动测试。
+2.  **运行脚本**：在终端中粘贴并执行以下命令即可启动测试。
 
     ```bash
-    curl -sS https://raw.githubusercontent.com/AsakuraYunoi/DiskLinearWriteSpeedTestForMacOSTerminal/main/DiskLinearWriteSpeedTestForMacOSTerminal.sh | bash
+    sh //把脚本的.sh文件拖进来之后会车
     ```
 
 3.  **按照提示操作**：脚本启动后会显示提示信息，请根据提示完成后续步骤。
